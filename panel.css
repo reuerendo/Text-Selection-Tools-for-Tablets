@@ -1,0 +1,33 @@
+#text-selection-panel {
+  position: absolute;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  font-family: -moz-dialog, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.panel-button {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.panel-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.panel-button:active {
+  background-color: rgba(0, 0, 0, 0.2);
+}
