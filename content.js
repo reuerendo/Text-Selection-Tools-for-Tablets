@@ -13,6 +13,10 @@ let searchButton = document.createElement('button');
 searchButton.textContent = 'Поиск';
 searchButton.classList.add('panel-button');
 
+let pasteButton = document.createElement('button');
+pasteButton.textContent = 'Вставить';
+pasteButton.classList.add('panel-button');
+
 // Добавляем кнопки в панель
 panel.appendChild(copyButton);
 panel.appendChild(searchButton);
@@ -36,9 +40,14 @@ document.addEventListener('selectionchange', function() {
     const selectedText = selection.toString().trim();
     
     if (selectedText.length > 0) {
-      // Получаем координаты выделения
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+      // Очищаем панель от предыдущих кнопок
+      while (panel.firstChild) {
+        panel.removeChild(panel.firstChild);
+      }
+      
+      // Добавляем кнопки для выделенного текста
+      panel.appendChild(copyButton);
+      panel.appendChild(searchButton);
       
       // Сначала добавляем панель в DOM с отображением, чтобы получить её размеры
       panel.style.display = 'flex';
@@ -64,7 +73,7 @@ document.addEventListener('selectionchange', function() {
       
       // Если панель выходит за верхний край экрана, показываем её под текстом
       if (panelRect.top < 0) {
-        panel.style.top = (rect.bottom + window.scrollY + lineHeight) + 'px';
+        panel.style.top = (endRect.bottom + window.scrollY + 5) + 'px';
       }
       
       // Показываем панель
@@ -94,6 +103,89 @@ searchButton.addEventListener('click', function() {
   panel.style.display = 'none';
 });
 
+// Обработчик клика на кнопку "Вставить"
+pasteButton.addEventListener('click', function() {
+  navigator.clipboard.readText()
+    .then(text => {
+      if (document.activeElement && 
+          (document.activeElement.tagName === 'INPUT' || 
+           document.activeElement.tagName === 'TEXTAREA' || 
+           document.activeElement.isContentEditable)) {
+        
+        // Вставляем текст в активное поле ввода
+        const activeElement = document.activeElement;
+        
+        if (activeElement.isContentEditable) {
+          // Для contentEditable элементов
+          document.execCommand('insertText', false, text);
+        } else {
+          // Для обычных input/textarea
+          const start = activeElement.selectionStart || 0;
+          const end = activeElement.selectionEnd || 0;
+          const value = activeElement.value;
+          
+          activeElement.value = value.substring(0, start) + text + value.substring(end);
+          
+          // Устанавливаем курсор после вставленного текста
+          activeElement.selectionStart = activeElement.selectionEnd = start + text.length;
+        }
+      }
+      
+      // Скрываем панель после вставки
+      panel.style.display = 'none';
+    })
+    .catch(err => {
+      console.error('Ошибка при вставке: ', err);
+    });
+});
+
+// Обработчики для полей ввода (input, textarea, contenteditable)
+document.addEventListener('click', function(event) {
+  // Проверяем, является ли элемент полем ввода
+  if (event.target && 
+      (event.target.tagName === 'INPUT' || 
+       event.target.tagName === 'TEXTAREA' || 
+       event.target.isContentEditable)) {
+    
+    // Очищаем панель от предыдущих кнопок
+    while (panel.firstChild) {
+      panel.removeChild(panel.firstChild);
+    }
+    
+    // Добавляем только кнопку "Вставить"
+    panel.appendChild(pasteButton);
+    
+    // Позиционируем панель рядом с полем ввода
+    const rect = event.target.getBoundingClientRect();
+    
+    // Проверяем наличие текста в буфере обмена перед показом кнопки "Вставить"
+    navigator.clipboard.readText()
+      .then(text => {
+        if (text && text.trim() !== '') {
+          // Позиционируем панель над полем ввода
+          panel.style.left = rect.left + window.scrollX + 'px';
+          panel.style.top = (rect.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+          
+          // Если панель выходит за верхний край экрана, показываем справа
+          if (rect.top + window.scrollY - panel.offsetHeight - 5 < 0) {
+            panel.style.top = rect.top + window.scrollY + 'px';
+            panel.style.left = (rect.right + window.scrollX + 5) + 'px';
+          }
+          
+          // Показываем панель
+          panel.style.display = 'flex';
+          panel.style.visibility = 'visible';
+        }
+      })
+      .catch(err => {
+        console.error('Ошибка при чтении буфера обмена: ', err);
+      });
+  } else if (!panel.contains(event.target) && panel.style.display !== 'none') {
+    // Скрываем панель при клике вне панели
+    panel.style.display = 'none';
+  }
+});
+
 // Скрываем панель при клике вне панели
 document.addEventListener('click', function(event) {
   if (!panel.contains(event.target) && panel.style.display !== 'none') {
@@ -120,7 +212,3 @@ function updateColors() {
 
 // Первоначальное применение цветов темы
 updateColors();
-
-// Для отслеживания изменений темы браузера можно использовать MutationObserver,
-// но это имеет ограничения. Лучшей практикой будет использование
-// browser.theme.getCurrent() в реальном расширении
