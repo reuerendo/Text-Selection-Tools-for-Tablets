@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Настройки Текстового Меню</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Настройки текстового меню</h1>
+    
+    <div class="section">
+      <h2>Отображаемые пункты меню</h2>
+      <div class="option">
+        <label>
+          <input type="checkbox" id="copy-checkbox"> Копировать
+        </label>
+      </div>
+      <div class="option">
+        <label>
+          <input type="checkbox" id="search-checkbox"> Поиск
+        </label>
+      </div>
+      <div class="option">
+        <label>
+          <input type="checkbox" id="translate-checkbox"> Перевод
+        </label>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <button id="save-button">Сохранить</button>
+      <div id="status-message"></div>
+    </div>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html>
