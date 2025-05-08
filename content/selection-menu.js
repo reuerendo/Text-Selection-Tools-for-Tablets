@@ -9,7 +9,7 @@ selectionMenu.classList.add('text-selection-menu-extension');
 
 // Переменная для хранения текущего выделения
 let currentSelection = '';
-let menuItems = ['copy', 'search', 'translate'];
+let menuItems = ['copy', 'search', 'context_menu'];
 
 // Сразу создаем базовое меню, чтобы оно было доступно
 createMenuElements({
@@ -19,16 +19,9 @@ createMenuElements({
   button_background_hover: '#e0e0e0'
 });
 
-// Получаем настройки из хранилища при загрузке
-browser.storage.sync.get('enabledItems', (result) => {
-  if (result.enabledItems) {
-    menuItems = result.enabledItems;
-  }
-  
-  // Загружаем тему Firefox для цветов
-  getCurrentThemeColors().then(colors => {
-    createMenuElements(colors);
-  });
+// Загружаем тему Firefox для цветов
+getCurrentThemeColors().then(colors => {
+  createMenuElements(colors);
 });
 
 // Создаем элементы меню
@@ -47,26 +40,15 @@ function createMenuElements(colors) {
   selectionMenu.style.color = colors.text || '#000000';
   selectionMenu.style.borderColor = colors.border || '#cccccc';
   
-  // Если нет включенных пунктов меню, включаем все по умолчанию
-  if (!menuItems || menuItems.length === 0) {
-    menuItems = ['copy', 'search', 'translate'];
-  }
+  // Добавляем пункты меню
+  const copyButton = createMenuItem('Копировать', copySelectedText, colors);
+  menuContainer.appendChild(copyButton);
   
-  // Добавляем пункты меню в зависимости от настроек
-  if (menuItems.includes('copy')) {
-    const copyButton = createMenuItem('Копировать', copySelectedText, colors);
-    menuContainer.appendChild(copyButton);
-  }
+  const searchButton = createMenuItem('Поиск', searchSelectedText, colors);
+  menuContainer.appendChild(searchButton);
   
-  if (menuItems.includes('search')) {
-    const searchButton = createMenuItem('Поиск', searchSelectedText, colors);
-    menuContainer.appendChild(searchButton);
-  }
-  
-  if (menuItems.includes('translate')) {
-    const translateButton = createMenuItem('Перевод', translateSelectedText, colors);
-    menuContainer.appendChild(translateButton);
-  }
+  const contextMenuButton = createMenuItem('...', openContextMenu, colors);
+  menuContainer.appendChild(contextMenuButton);
   
   // Добавляем контейнер в меню
   selectionMenu.appendChild(menuContainer);
@@ -93,7 +75,7 @@ function createMenuItem(text, callback, colors) {
   menuItem.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    callback();
+    callback(e);
     hideSelectionMenu();
   });
   
@@ -167,32 +149,24 @@ function searchSelectedText() {
   window.open(searchUrl, '_blank');
 }
 
-function translateSelectedText() {
-  const translateUrl = `https://translate.google.com/?text=${encodeURIComponent(currentSelection)}`;
-  window.open(translateUrl, '_blank');
+function openContextMenu(e) {
+  // Чтобы вызвать контекстное меню браузера, имитируем нажатие правой кнопки мыши
+  const contextEvent = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    button: 2,
+    buttons: 2,
+    clientX: e.clientX,
+    clientY: e.clientY
+  });
+  
+  // Отправляем событие к элементу, где произошло выделение
+  document.elementFromPoint(e.clientX, e.clientY).dispatchEvent(contextEvent);
 }
 
 // Показать всплывающее меню
 function showSelectionMenu(x, y) {
-  // Проверяем наличие пунктов меню
-  const menuContainer = selectionMenu.querySelector('.menu-container');
-  if (menuContainer && menuContainer.childElementCount === 0) {
-    console.log("Меню не содержит пунктов, повторное создание элементов");
-    
-    // Пробуем перезагрузить настройки и пересоздать меню
-    browser.storage.sync.get('enabledItems', (result) => {
-      if (result.enabledItems) {
-        menuItems = result.enabledItems;
-      } else {
-        menuItems = ['copy', 'search', 'translate'];
-      }
-      
-      getCurrentThemeColors().then(colors => {
-        createMenuElements(colors);
-      });
-    });
-  }
-  
   console.log(`Показываем меню на позиции: x=${x}, y=${y}`);
   selectionMenu.style.left = `${x}px`;
   selectionMenu.style.top = `${y}px`;
@@ -268,20 +242,6 @@ document.addEventListener('selectionchange', () => {
       
       showSelectionMenu(x, y);
     }
-  }
-});
-
-// Обновление настроек при их изменении
-browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes.enabledItems) {
-    menuItems = changes.enabledItems.newValue || ['copy', 'search', 'translate'];
-    
-    // Обновляем элементы меню с новыми настройками
-    getCurrentThemeColors().then(colors => {
-      createMenuElements(colors);
-    });
-    
-    console.log("Настройки обновлены:", menuItems);
   }
 });
 
