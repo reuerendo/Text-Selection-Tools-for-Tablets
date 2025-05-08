@@ -13,29 +13,12 @@ let searchButton = document.createElement('button');
 searchButton.textContent = 'Поиск';
 searchButton.classList.add('panel-button');
 
-let pasteButton = document.createElement('button');
-pasteButton.textContent = 'Вставить';
-pasteButton.classList.add('panel-button');
-pasteButton.style.display = 'none'; // Изначально скрыта
-
 // Добавляем кнопки в панель
 panel.appendChild(copyButton);
 panel.appendChild(searchButton);
-panel.appendChild(pasteButton);
 
 // Таймер для отсрочки показа панели (предотвращает мерцание при выделении)
 let panelTimer = null;
-
-// Функция проверки наличия текста в буфере обмена
-async function checkClipboard() {
-  try {
-    const text = await navigator.clipboard.readText();
-    return text && text.trim().length > 0;
-  } catch (err) {
-    console.error('Ошибка при чтении буфера обмена:', err);
-    return false;
-  }
-}
 
 // Обработчик выделения текста
 document.addEventListener('selectionchange', function() {
@@ -109,66 +92,6 @@ searchButton.addEventListener('click', function() {
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
   window.open(searchUrl, '_blank');
   panel.style.display = 'none';
-});
-
-// Обработчик клика на кнопку "Вставить"
-pasteButton.addEventListener('click', async function() {
-  try {
-    const clipboardText = await navigator.clipboard.readText();
-    
-    // Находим активный элемент (текстовое поле)
-    const activeElement = document.activeElement;
-    
-    if (activeElement && (
-        (activeElement.tagName === 'INPUT' && 
-         (activeElement.type === 'text' || activeElement.type === 'search' || 
-          activeElement.type === 'password' || activeElement.type === 'email' || 
-          activeElement.type === 'tel' || activeElement.type === 'url' ||
-          activeElement.type === 'number')) || 
-        activeElement.tagName === 'TEXTAREA' ||
-        activeElement.isContentEditable)) {
-      
-      // Для обычных input и textarea
-      if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
-        const startPos = activeElement.selectionStart || 0;
-        const endPos = activeElement.selectionEnd || 0;
-        
-        // Сохраняем начальное и конечное значение
-        const beforeText = activeElement.value.substring(0, startPos);
-        const afterText = activeElement.value.substring(endPos);
-        
-        // Вставляем текст из буфера
-        activeElement.value = beforeText + clipboardText + afterText;
-        
-        // Устанавливаем курсор после вставленного текста
-        activeElement.selectionStart = activeElement.selectionEnd = startPos + clipboardText.length;
-      } 
-      // Для contentEditable элементов
-      else if (activeElement.isContentEditable) {
-        // Создаем текстовый узел с содержимым буфера обмена
-        const textNode = document.createTextNode(clipboardText);
-        
-        // Получаем текущую позицию курсора
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents(); // Удаляем выделенный текст, если есть
-          range.insertNode(textNode); // Вставляем текст из буфера
-          
-          // Перемещаем курсор в конец вставленного текста
-          range.setStartAfter(textNode);
-          range.setEndAfter(textNode);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      }
-    }
-    
-    // Скрываем панель после вставки
-    panel.style.display = 'none';
-  } catch (err) {
-    console.error('Ошибка при вставке: ', err);
-  }
 });
 
 // Скрываем панель при клике вне панели
