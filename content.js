@@ -4,30 +4,41 @@ panel.id = 'text-selection-panel';
 panel.style.display = 'none';
 document.body.appendChild(panel);
 
+// Инициализируем сообщения для интернационализации
+let messages = {
+  copyButtonText: browser.i18n.getMessage("copyButtonText") || "Copy",
+  searchButtonText: browser.i18n.getMessage("searchButtonText") || "Search",
+  cutButtonText: browser.i18n.getMessage("cutButtonText") || "Cut",
+  pasteButtonText: browser.i18n.getMessage("pasteButtonText") || "Paste",
+  deleteButtonText: browser.i18n.getMessage("deleteButtonText") || "Delete",
+  selectAllButtonText: browser.i18n.getMessage("selectAllButtonText") || "Select all",
+  pasteAlertText: browser.i18n.getMessage("pasteAlertText") || "To paste, please use Ctrl+V keyboard shortcut"
+};
+
 // Создаем кнопки для выделения текста
 let copyButton = document.createElement('button');
-copyButton.textContent = 'Копировать';
+copyButton.textContent = messages.copyButtonText;
 copyButton.classList.add('panel-button');
 
 let searchButton = document.createElement('button');
-searchButton.textContent = 'Поиск';
+searchButton.textContent = messages.searchButtonText;
 searchButton.classList.add('panel-button');
 
 // Создаем кнопки для полей ввода
 let cutButton = document.createElement('button');
-cutButton.textContent = 'Вырезать';
+cutButton.textContent = messages.cutButtonText;
 cutButton.classList.add('panel-button');
 
 let pasteButton = document.createElement('button');
-pasteButton.textContent = 'Вставить';
+pasteButton.textContent = messages.pasteButtonText;
 pasteButton.classList.add('panel-button');
 
 let deleteButton = document.createElement('button');
-deleteButton.textContent = 'Удалить';
+deleteButton.textContent = messages.deleteButtonText;
 deleteButton.classList.add('panel-button');
 
 let selectAllButton = document.createElement('button');
-selectAllButton.textContent = 'Выделить все';
+selectAllButton.textContent = messages.selectAllButtonText;
 selectAllButton.classList.add('panel-button');
 
 // Таймер для отсрочки показа панели (предотвращает мерцание при выделении)
@@ -451,12 +462,12 @@ pasteButton.addEventListener('click', function() {
         console.error('Ошибка при чтении буфера обмена: ', err);
         // В Firefox нужны особые разрешения для чтения буфера обмена,
         // поэтому мы предлагаем пользователю использовать Ctrl+V
-        alert('Для вставки, пожалуйста, используйте сочетание клавиш Ctrl+V');
+        alert(messages.pasteAlertText);
         panel.style.display = 'none';
       });
   } else {
     // Если API недоступен, предлагаем использовать Ctrl+V
-    alert('Для вставки, пожалуйста, используйте сочетание клавиш Ctrl+V');
+    alert(messages.pasteAlertText);
     panel.style.display = 'none';
   }
 });
