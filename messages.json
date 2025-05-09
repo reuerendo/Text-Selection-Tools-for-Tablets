@@ -1,0 +1,38 @@
+{
+  "extensionName": {
+    "message": "Text Selection Tools for Tablets",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Several improvements that make working on touch devices easier",
+    "description": "Extension description"
+  },
+  "copyButtonText": {
+    "message": "Copy",
+    "description": "Copy button text"
+  },
+  "searchButtonText": {
+    "message": "Search",
+    "description": "Search button text"
+  },
+  "cutButtonText": {
+    "message": "Cut",
+    "description": "Cut button text"
+  },
+  "pasteButtonText": {
+    "message": "Paste",
+    "description": "Paste button text"
+  },
+  "deleteButtonText": {
+    "message": "Delete",
+    "description": "Delete button text"
+  },
+  "selectAllButtonText": {
+    "message": "Select all",
+    "description": "Select all button text"
+  },
+  "pasteAlertText": {
+    "message": "To paste, please use Ctrl+V keyboard shortcut",
+    "description": "Alert message for paste fallback"
+  }
+}
