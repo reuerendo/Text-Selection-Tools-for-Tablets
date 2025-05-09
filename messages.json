@@ -1,0 +1,38 @@
+{
+  "extensionName": {
+    "message": "Инструменты выделения текста для планшетов",
+    "description": "Название расширения"
+  },
+  "extensionDescription": {
+    "message": "Несколько улучшений, которые облегчают работу на сенсорных устройствах",
+    "description": "Описание расширения"
+  },
+  "copyButtonText": {
+    "message": "Копировать",
+    "description": "Текст кнопки копирования"
+  },
+  "searchButtonText": {
+    "message": "Поиск",
+    "description": "Текст кнопки поиска"
+  },
+  "cutButtonText": {
+    "message": "Вырезать",
+    "description": "Текст кнопки вырезания"
+  },
+  "pasteButtonText": {
+    "message": "Вставить",
+    "description": "Текст кнопки вставки"
+  },
+  "deleteButtonText": {
+    "message": "Удалить",
+    "description": "Текст кнопки удаления"
+  },
+  "selectAllButtonText": {
+    "message": "Выделить все",
+    "description": "Текст кнопки выделения всего"
+  },
+  "pasteAlertText": {
+    "message": "Для вставки, пожалуйста, используйте сочетание клавиш Ctrl+V",
+    "description": "Текст предупреждения при вставке"
+  }
+}
