@@ -53,7 +53,7 @@ document.addEventListener('selectionchange', function() {
     if (selectedText.length > 0) {
       // Проверяем, где происходит выделение
       const activeElement = document.activeElement;
-      const isInputField = activeElement.matches('input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], textarea, [contenteditable="true"]');
+      const isInputField = activeElement.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
       
       if (isInputField) {
         // Выделение в поле ввода
@@ -135,12 +135,12 @@ function positionPanel(selection) {
   panel.style.visibility = 'visible';
 }
 
-// Обработчик для полей ввода
+// Обработчик для полей ввода (клик)
 document.addEventListener('click', function(event) {
   const target = event.target;
   
   // Проверяем, является ли элемент полем ввода
-  if (target.matches('input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], textarea, [contenteditable="true"]')) {
+  if (target.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')) {
     // Устанавливаем текущий элемент
     currentElement = target;
     
@@ -160,6 +160,29 @@ document.addEventListener('click', function(event) {
     panel.style.display = 'none';
   }
 });
+
+// Добавляем обработчик события focus для полей ввода
+document.addEventListener('focus', function(event) {
+  const target = event.target;
+  
+  // Проверяем, является ли элемент полем ввода
+  if (target.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')) {
+    // Устанавливаем текущий элемент
+    currentElement = target;
+    
+    // Проверяем, есть ли выделенный текст
+    setTimeout(() => {
+      const selectedText = getSelectedTextFromElement(target);
+      if (selectedText && selectedText.length > 0) {
+        // Если текст выделен, показываем панель с кнопками для выделения в поле ввода
+        showInputSelectionPanel(window.getSelection());
+      } else {
+        // Если текст не выделен, показываем панель вставки
+        showPastePanel(target);
+      }
+    }, 100);
+  }
+}, true);
 
 // Функция для получения выделенного текста из элемента
 function getSelectedTextFromElement(element) {
