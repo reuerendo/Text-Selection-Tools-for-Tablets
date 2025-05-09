@@ -13,17 +13,26 @@ let searchButton = document.createElement('button');
 searchButton.textContent = 'Поиск';
 searchButton.classList.add('panel-button');
 
-// Создаем кнопку для вставки
+// Создаем кнопки для полей ввода
+let cutButton = document.createElement('button');
+cutButton.textContent = 'Вырезать';
+cutButton.classList.add('panel-button');
+
 let pasteButton = document.createElement('button');
 pasteButton.textContent = 'Вставить';
 pasteButton.classList.add('panel-button');
 
-// Добавляем кнопки в панель
-// (Кнопки будут добавляться динамически в зависимости от контекста)
+let deleteButton = document.createElement('button');
+deleteButton.textContent = 'Удалить';
+deleteButton.classList.add('panel-button');
+
+let selectAllButton = document.createElement('button');
+selectAllButton.textContent = 'Выделить все';
+selectAllButton.classList.add('panel-button');
 
 // Таймер для отсрочки показа панели (предотвращает мерцание при выделении)
 let panelTimer = null;
-let currentMode = null; // 'selection' или 'input'
+let currentMode = null; // 'selection', 'input' или 'input-selection'
 let currentElement = null; // Текущий элемент, на котором фокус
 
 // Обработчик выделения текста
@@ -42,13 +51,23 @@ document.addEventListener('selectionchange', function() {
     const selectedText = selection.toString().trim();
     
     if (selectedText.length > 0) {
-      // Показываем панель выделения текста
-      showSelectionPanel(selection);
+      // Проверяем, где происходит выделение
+      const activeElement = document.activeElement;
+      const isInputField = activeElement.matches('input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], textarea, [contenteditable="true"]');
+      
+      if (isInputField) {
+        // Выделение в поле ввода
+        currentElement = activeElement;
+        showInputSelectionPanel(selection);
+      } else {
+        // Выделение обычного текста на странице
+        showSelectionPanel(selection);
+      }
     }
   }, 200);
 });
 
-// Функция для показа панели выделения текста
+// Функция для показа панели выделения текста на странице
 function showSelectionPanel(selection) {
   currentMode = 'selection';
   
@@ -59,6 +78,28 @@ function showSelectionPanel(selection) {
   panel.appendChild(copyButton);
   panel.appendChild(searchButton);
   
+  positionPanel(selection);
+}
+
+// Функция для показа панели выделения текста в полях ввода
+function showInputSelectionPanel(selection) {
+  currentMode = 'input-selection';
+  
+  // Очищаем панель от предыдущих кнопок
+  panel.innerHTML = '';
+  
+  // Добавляем кнопки для выделенного текста в поле ввода
+  panel.appendChild(copyButton);
+  panel.appendChild(cutButton);
+  panel.appendChild(pasteButton);
+  panel.appendChild(deleteButton);
+  panel.appendChild(selectAllButton);
+  
+  positionPanel(selection);
+}
+
+// Функция позиционирования панели
+function positionPanel(selection) {
   // Получаем координаты выделения
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
@@ -103,9 +144,16 @@ document.addEventListener('click', function(event) {
     // Устанавливаем текущий элемент
     currentElement = target;
     
-    // Показываем панель вставки с небольшой задержкой
+    // Проверяем, есть ли выделенный текст
     setTimeout(() => {
-      showPastePanel(target);
+      const selectedText = getSelectedTextFromElement(target);
+      if (selectedText && selectedText.length > 0) {
+        // Если текст выделен, показываем панель с кнопками для выделения в поле ввода
+        showInputSelectionPanel(window.getSelection());
+      } else {
+        // Если текст не выделен, показываем панель вставки
+        showPastePanel(target);
+      }
     }, 100);
   } else if (!panel.contains(event.target) && panel.style.display !== 'none') {
     // Скрываем панель при клике вне панели и вне полей ввода
@@ -113,7 +161,17 @@ document.addEventListener('click', function(event) {
   }
 });
 
-// Функция для показа панели вставки
+// Функция для получения выделенного текста из элемента
+function getSelectedTextFromElement(element) {
+  if (element.matches('input, textarea')) {
+    return element.value.substring(element.selectionStart, element.selectionEnd);
+  } else if (element.matches('[contenteditable="true"]')) {
+    return window.getSelection().toString();
+  }
+  return '';
+}
+
+// Функция для показа панели вставки (когда нет выделения в поле ввода)
 function showPastePanel(inputElement) {
   // Если нет доступа к буферу обмена, не показываем панель
   if (!navigator.clipboard) {
@@ -125,8 +183,16 @@ function showPastePanel(inputElement) {
   // Очищаем панель от предыдущих кнопок
   panel.innerHTML = '';
   
-  // Добавляем только кнопку вставки
+  // Добавляем кнопку вставки
   panel.appendChild(pasteButton);
+  
+  // Добавляем "Выделить все" только если в поле есть текст
+  const hasText = (inputElement.value && inputElement.value.length > 0) || 
+                  (inputElement.textContent && inputElement.textContent.trim().length > 0);
+  
+  if (hasText) {
+    panel.appendChild(selectAllButton);
+  }
   
   // Получаем координаты поля ввода
   const rect = inputElement.getBoundingClientRect();
@@ -171,6 +237,135 @@ copyButton.addEventListener('click', function() {
       fallbackCopy(selectedText);
       panel.style.display = 'none';
     });
+});
+
+// Обработчик клика на кнопку "Вырезать"
+cutButton.addEventListener('click', function() {
+  if (!currentElement) {
+    panel.style.display = 'none';
+    return;
+  }
+  
+  const selectedText = getSelectedTextFromElement(currentElement);
+  
+  // Копируем текст в буфер обмена
+  navigator.clipboard.writeText(selectedText)
+    .then(() => {
+      // Вырезаем текст из поля ввода
+      deleteSelectedText(currentElement);
+      panel.style.display = 'none';
+    })
+    .catch(err => {
+      console.error('Ошибка при вырезании: ', err);
+      fallbackCut(currentElement);
+      panel.style.display = 'none';
+    });
+});
+
+// Резервный метод вырезания
+function fallbackCut(element) {
+  try {
+    // Сначала пробуем использовать execCommand
+    document.execCommand('cut');
+  } catch (err) {
+    console.error('Ошибка при резервном вырезании: ', err);
+    
+    // Если не получилось, то делаем копирование + удаление
+    const selectedText = getSelectedTextFromElement(element);
+    fallbackCopy(selectedText);
+    deleteSelectedText(element);
+  }
+}
+
+// Функция для удаления выделенного текста
+function deleteSelectedText(element) {
+  if (element.matches('input, textarea')) {
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    element.value = element.value.substring(0, start) + element.value.substring(end);
+    element.selectionStart = element.selectionEnd = start;
+  } else if (element.matches('[contenteditable="true"]')) {
+    document.execCommand('delete');
+  }
+  
+  // Создаем событие изменения input
+  const event = new Event('input', { bubbles: true });
+  element.dispatchEvent(event);
+}
+
+// Обработчик клика на кнопку "Удалить"
+deleteButton.addEventListener('click', function() {
+  if (!currentElement) {
+    panel.style.display = 'none';
+    return;
+  }
+  
+  deleteSelectedText(currentElement);
+  panel.style.display = 'none';
+});
+
+// Обработчик клика на кнопку "Выделить все"
+selectAllButton.addEventListener('click', function() {
+  if (!currentElement) {
+    panel.style.display = 'none';
+    return;
+  }
+  
+  // Выделяем весь текст
+  if (currentElement.matches('input, textarea')) {
+    currentElement.select();
+  } else if (currentElement.matches('[contenteditable="true"]')) {
+    const range = document.createRange();
+    range.selectNodeContents(currentElement);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  
+  // Скрываем панель на время выделения
+  panel.style.display = 'none';
+  
+  // Даем время для обработки выделения и отображаем обновленную панель
+  setTimeout(() => {
+    // Очищаем панель от предыдущих кнопок
+    panel.innerHTML = '';
+    
+    // Добавляем только нужные кнопки: Копировать, Вырезать, Вставить, Удалить
+    panel.appendChild(copyButton);
+    panel.appendChild(cutButton);
+    panel.appendChild(pasteButton);
+    panel.appendChild(deleteButton);
+    
+    // Получаем координаты поля ввода
+    const rect = currentElement.getBoundingClientRect();
+    
+    // Показываем панель для измерения размеров
+    panel.style.display = 'flex';
+    panel.style.visibility = 'hidden';
+    
+    // Позиционируем панель рядом с полем ввода
+    panel.style.left = rect.right + window.scrollX - panel.offsetWidth + 'px';
+    panel.style.top = (rect.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+    
+    // Проверяем, не выходит ли панель за пределы экрана
+    const panelRect = panel.getBoundingClientRect();
+    
+    // Если панель выходит за левый край экрана
+    if (panelRect.left < 0) {
+      panel.style.left = window.scrollX + 5 + 'px';
+    }
+    
+    // Если панель выходит за верхний край экрана
+    if (panelRect.top < 0) {
+      panel.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+    }
+    
+    // Показываем панель
+    panel.style.visibility = 'visible';
+    
+    // Устанавливаем режим
+    currentMode = 'input-selection';
+  }, 100);
 });
 
 // Резервный метод копирования для Firefox
@@ -271,8 +466,8 @@ document.addEventListener('keydown', function(event) {
 
 // Скрытие панели при потере фокуса поля ввода
 document.addEventListener('focusout', function(event) {
-  // Если панель показана и режим - вставка
-  if (panel.style.display !== 'none' && currentMode === 'input') {
+  // Если панель показана и режим - поле ввода
+  if (panel.style.display !== 'none' && (currentMode === 'input' || currentMode === 'input-selection')) {
     // Проверяем, что фокус не перешел на панель
     setTimeout(() => {
       if (!panel.contains(document.activeElement)) {
@@ -299,7 +494,7 @@ function updateColors() {
   panel.style.color = computedStyle.getPropertyValue('--toolbar-color') || '#0c0c0d';
   
   // Обновляем стили всех кнопок
-  [copyButton, searchButton, pasteButton].forEach(button => {
+  [copyButton, searchButton, cutButton, pasteButton, deleteButton, selectAllButton].forEach(button => {
     button.style.color = computedStyle.getPropertyValue('--toolbar-color') || '#0c0c0d';
     button.style.backgroundColor = computedStyle.getPropertyValue('--toolbar-bgcolor') || '#f9f9fa';
   });
