@@ -35,8 +35,16 @@ let panelTimer = null;
 let currentMode = null; // 'selection', 'input' или 'input-selection'
 let currentElement = null; // Текущий элемент, на котором фокус
 
+// Добавляем флаг, чтобы отслеживать, когда выделение было инициировано кнопкой "Выделить все"
+let selectAllTriggered = false;
+
 // Обработчик выделения текста
 document.addEventListener('selectionchange', function() {
+  // Если выделение было инициировано кнопкой "Выделить все", пропускаем обработку
+  if (selectAllTriggered) {
+    return;
+  }
+  
   // Скрываем панель при изменении выделения
   panel.style.display = 'none';
   
@@ -334,6 +342,9 @@ selectAllButton.addEventListener('click', function() {
     return;
   }
   
+  // Устанавливаем флаг перед выделением
+  selectAllTriggered = true;
+  
   // Выделяем весь текст
   if (currentElement.matches('input, textarea')) {
     currentElement.select();
@@ -348,7 +359,7 @@ selectAllButton.addEventListener('click', function() {
   // Скрываем панель на время выделения
   panel.style.display = 'none';
   
-  // Даем время для обработки выделения и отображаем обновленную панель
+  // Показываем обновленную панель с нужными кнопками
   setTimeout(() => {
     // Очищаем панель от предыдущих кнопок
     panel.innerHTML = '';
@@ -388,6 +399,11 @@ selectAllButton.addEventListener('click', function() {
     
     // Устанавливаем режим
     currentMode = 'input-selection';
+    
+    // Сбрасываем флаг через небольшую задержку
+    setTimeout(() => {
+      selectAllTriggered = false;
+    }, 500);
   }, 100);
 });
 
