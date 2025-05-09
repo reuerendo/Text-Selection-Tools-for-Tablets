@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Text Selection Panel",
-  "version": "1.0",
-  "description": "Показывает панель с кнопками при выделении текста",
+  "name": "Text Selection Tools for Tablets",
+  "version": "1.2",
+  "description": "Several improvements that make working on touch devices easier",
   "icons": {
     "48": "icons/icon.svg",
     "96": "icons/icon.svg"
@@ -10,13 +10,18 @@
   "permissions": [
     "activeTab",
     "clipboardRead",
-    "clipboardWrite"
+    "clipboardWrite",
+	"tabs"
   ],
+  "background": {
+    "scripts": ["background.js"]
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["panel.css"]
+      "js": ["content.js", "tap.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
     }
   ]
 }
