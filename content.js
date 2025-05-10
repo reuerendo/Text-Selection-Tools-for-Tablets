@@ -613,6 +613,101 @@ function pasteTextToElement(element, text) {
   element.dispatchEvent(event);
 }
 
+// Добавляем обработчик двойного клика для полей ввода
+document.addEventListener('dblclick', function(event) {
+  const target = event.target;
+  
+  // Проверяем, является ли элемент полем ввода
+  if (target.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')) {
+    // Предотвращаем конфликты с существующим кодом выделения текста
+    event.preventDefault();
+    
+    // Устанавливаем флаг перед выделением
+    selectAllTriggered = true;
+    
+    // Устанавливаем текущий элемент
+    currentElement = target;
+    
+    // Выделяем весь текст
+    if (target.matches('input, textarea')) {
+      target.select();
+    } else if (target.matches('[contenteditable="true"]')) {
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    
+    // Скрываем панель на время выделения
+    panel.style.display = 'none';
+    
+    // Показываем обновленную панель с нужными кнопками
+    setTimeout(() => {
+      // Очищаем панель от предыдущих кнопок
+      panel.innerHTML = '';
+      
+      // Добавляем только нужные кнопки: Копировать, Вырезать, Вставить, Удалить
+      panel.appendChild(copyButton);
+      panel.appendChild(cutButton);
+      panel.appendChild(pasteButton);
+      panel.appendChild(deleteButton);
+      
+      // Используем координаты элемента для позиционирования
+      const rect = target.getBoundingClientRect();
+      const selection = window.getSelection();
+      let panelX, panelY;
+      
+      if (selection.rangeCount > 0) {
+        // Используем координаты выделения
+        const range = selection.getRangeAt(0);
+        const selectionRect = range.getBoundingClientRect();
+        panelX = selectionRect.right + window.scrollX;
+        panelY = selectionRect.top + window.scrollY - panel.offsetHeight - 5;
+      } else {
+        // Используем координаты элемента
+        panelX = rect.right + window.scrollX;
+        panelY = rect.top + window.scrollY - panel.offsetHeight - 5;
+      }
+      
+      // Показываем панель для измерения размеров
+      panel.style.display = 'flex';
+      panel.style.visibility = 'hidden';
+      panel.style.left = panelX + 'px';
+      panel.style.top = panelY + 'px';
+      
+      // Проверяем, не выходит ли панель за пределы экрана
+      const panelRect = panel.getBoundingClientRect();
+      
+      // Если панель выходит за правый край экрана
+      if (panelRect.right > window.innerWidth) {
+        panel.style.left = (window.innerWidth - panelRect.width - 10) + 'px';
+      }
+      
+      // Если панель выходит за левый край экрана
+      if (panelRect.left < 0) {
+        panel.style.left = window.scrollX + 5 + 'px';
+      }
+      
+      // Если панель выходит за верхний край экрана
+      if (panelRect.top < 0) {
+        panel.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+      }
+      
+      // Показываем панель
+      panel.style.visibility = 'visible';
+      
+      // Устанавливаем режим
+      currentMode = 'input-selection';
+      
+      // Сбрасываем флаг через небольшую задержку
+      setTimeout(() => {
+        selectAllTriggered = false;
+      }, 500);
+    }, 100);
+  }
+});
+
 // Скрытие панели при нажатии Escape
 document.addEventListener('keydown', function(event) {
   if (event.key === 'Escape' && panel.style.display !== 'none') {
