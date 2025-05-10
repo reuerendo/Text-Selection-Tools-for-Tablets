@@ -4,6 +4,47 @@ panel.id = 'text-selection-panel';
 panel.style.display = 'none';
 document.body.appendChild(panel);
 
+// Объявляем переменную для хранения текущих цветов темы
+let themeColors = {
+  toolbar: {
+    bgcolor: "#f9f9fa",  // Значения по умолчанию
+    color: "#0c0c0d",
+    border: "#ccc"
+  },
+  button: {
+    hover: "rgba(0, 0, 0, 0.1)",
+    active: "rgba(0, 0, 0, 0.2)"
+  }
+};
+
+// Слушаем сообщения от background script
+browser.runtime.onMessage.addListener((message) => {
+  if (message.action === "themeColors" && message.colors) {
+    themeColors = message.colors;
+    // Обновляем стили панели и кнопок
+    updateColors();
+    // Применяем цвета сразу, не дожидаясь вызова функции обновления
+    applyInitialStyles();
+  }
+});
+
+// Запрашиваем цвета текущей темы при загрузке страницы
+browser.runtime.sendMessage({ action: "getThemeColors" });
+
+// Функция для начального применения стилей
+function applyInitialStyles() {
+  // Устанавливаем стили панели в соответствии с темой
+  panel.style.backgroundColor = themeColors.toolbar.bgcolor;
+  panel.style.color = themeColors.toolbar.color;
+  panel.style.borderColor = themeColors.toolbar.border;
+  
+  // Устанавливаем стили кнопок
+  [copyButton, searchButton, cutButton, pasteButton, deleteButton, selectAllButton].forEach(button => {
+    button.style.color = themeColors.toolbar.color;
+    button.style.backgroundColor = "transparent";
+  });
+}
+
 // Инициализируем сообщения для интернационализации
 let messages = {
   copyButtonText: browser.i18n.getMessage("copyButtonText") || "Copy",
@@ -737,17 +778,35 @@ window.addEventListener('scroll', function() {
 
 // Обрабатываем изменение темы Firefox
 function updateColors() {
-  // Получаем текущие цвета темы браузера
-  const computedStyle = getComputedStyle(document.documentElement);
-  
-  // Обновляем стили элементов панели
-  panel.style.backgroundColor = computedStyle.getPropertyValue('--toolbar-bgcolor') || '#f9f9fa';
-  panel.style.color = computedStyle.getPropertyValue('--toolbar-color') || '#0c0c0d';
+  // Применяем цвета темы к панели и кнопкам
+  panel.style.backgroundColor = themeColors.toolbar.bgcolor;
+  panel.style.color = themeColors.toolbar.color;
+  panel.style.borderColor = themeColors.toolbar.border;
   
   // Обновляем стили всех кнопок
   [copyButton, searchButton, cutButton, pasteButton, deleteButton, selectAllButton].forEach(button => {
-    button.style.color = computedStyle.getPropertyValue('--toolbar-color') || '#0c0c0d';
-    button.style.backgroundColor = computedStyle.getPropertyValue('--toolbar-bgcolor') || '#f9f9fa';
+    button.style.color = themeColors.toolbar.color;
+    button.style.backgroundColor = "transparent";
+    
+    // Удаляем старые обработчики событий, чтобы избежать их накопления
+    button.onmouseenter = null;
+    button.onmouseleave = null;
+    button.onmousedown = null;
+    button.onmouseup = null;
+    
+    // Добавляем новые обработчики
+    button.onmouseenter = function() {
+      this.style.backgroundColor = themeColors.button.hover;
+    };
+    button.onmouseleave = function() {
+      this.style.backgroundColor = "transparent";
+    };
+    button.onmousedown = function() {
+      this.style.backgroundColor = themeColors.button.active;
+    };
+    button.onmouseup = function() {
+      this.style.backgroundColor = themeColors.button.hover;
+    };
   });
 }
 
