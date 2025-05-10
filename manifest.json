@@ -1,18 +1,20 @@
 {
   "manifest_version": 2,
   "name": "__MSG_extensionName__",
-  "version": "1.3",
+  "version": "1.5",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
   "icons": {
-    "48": "icons/icon.svg",
-    "96": "icons/icon.svg"
+    "128": "icons/icon.png"
   },
   "permissions": [
     "activeTab",
     "clipboardRead",
     "clipboardWrite",
-    "tabs"
+    "tabs",
+    "storage",
+	"scripting",
+	"theme"
   ],
   "background": {
     "scripts": ["background.js"]
@@ -24,5 +26,9 @@
       "css": ["panel.css"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "browser_style": true
+  }
 }
