@@ -13,9 +13,15 @@
     "clipboardWrite",
     "tabs",
     "storage",
-	"scripting",
-	"theme"
+    "scripting",
+    "theme"
   ],
+  "browser_action": {
+    "default_icon": {
+      "48": "icons/icon.png"
+    },
+    "default_title": "__MSG_extensionName__"
+  },
   "background": {
     "scripts": ["background.js"]
   },
