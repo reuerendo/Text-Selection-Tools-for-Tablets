@@ -19,11 +19,17 @@ let themeColors = {
 };
 
 // 3. Обработка сообщений от background script
+let extensionEnabled = true;
+
 browser.runtime.onMessage.addListener((message) => {
   if (message.action === "themeColors" && message.colors) {
+    extensionEnabled = true;
     themeColors = message.colors;
     updateColors();
     applyInitialStyles();
+  } else if (message.action === "extensionDisabled") {
+    extensionEnabled = false;
+    panel.style.display = 'none';
   }
 });
 
@@ -152,6 +158,8 @@ document.addEventListener('selectionchange', function() {
 
 // 10. Функции отображения панели
 function showSelectionPanel(selection) {
+  if (!extensionEnabled) return;
+  
   currentMode = 'selection';
   panel.innerHTML = '';
   panel.appendChild(copyButton);
@@ -160,6 +168,8 @@ function showSelectionPanel(selection) {
 }
 
 function showInputSelectionPanel(selection) {
+  if (!extensionEnabled) return;
+  
   currentMode = 'input-selection';
   panel.innerHTML = '';
   panel.appendChild(copyButton);
@@ -171,7 +181,7 @@ function showInputSelectionPanel(selection) {
 }
 
 function showPastePanel(inputElement, event) {
-  if (!navigator.clipboard) return;
+  if (!extensionEnabled || !navigator.clipboard) return;
   
   currentMode = 'input';
   panel.innerHTML = '';
