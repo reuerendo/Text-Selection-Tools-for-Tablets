@@ -48,6 +48,14 @@ let currentElement = null; // Текущий элемент, на котором
 
 // Добавляем флаг, чтобы отслеживать, когда выделение было инициировано кнопкой "Выделить все"
 let selectAllTriggered = false;
+// Добавляем переменную для хранения последнего клика мыши
+let lastClickPosition = { x: 0, y: 0 };
+
+// Обработчик клика мыши для запоминания позиции
+document.addEventListener('mousedown', function(event) {
+  lastClickPosition.x = event.clientX;
+  lastClickPosition.y = event.clientY;
+});
 
 // Обработчик выделения текста
 document.addEventListener('selectionchange', function() {
@@ -171,7 +179,7 @@ document.addEventListener('click', function(event) {
         showInputSelectionPanel(window.getSelection());
       } else {
         // Если текст не выделен, показываем панель вставки
-        showPastePanel(target);
+        showPastePanel(target, event);
       }
     }, 100);
   } else if (!panel.contains(event.target) && panel.style.display !== 'none') {
@@ -196,8 +204,8 @@ document.addEventListener('focus', function(event) {
         // Если текст выделен, показываем панель с кнопками для выделения в поле ввода
         showInputSelectionPanel(window.getSelection());
       } else {
-        // Если текст не выделен, показываем панель вставки
-        showPastePanel(target);
+        // Если текст не выделен, показываем панель вставки, используя последние координаты клика
+        showPastePanel(target, null);
       }
     }, 100);
   }
@@ -214,7 +222,7 @@ function getSelectedTextFromElement(element) {
 }
 
 // Функция для показа панели вставки (когда нет выделения в поле ввода)
-function showPastePanel(inputElement) {
+function showPastePanel(inputElement, event) {
   // Если нет доступа к буферу обмена, не показываем панель
   if (!navigator.clipboard) {
     return;
@@ -236,19 +244,41 @@ function showPastePanel(inputElement) {
     panel.appendChild(selectAllButton);
   }
   
-  // Получаем координаты поля ввода
-  const rect = inputElement.getBoundingClientRect();
-  
   // Показываем панель для измерения размеров
   panel.style.display = 'flex';
   panel.style.visibility = 'hidden';
   
-  // Позиционируем панель над полем ввода
-  panel.style.left = rect.right + window.scrollX - panel.offsetWidth + 'px';
-  panel.style.top = (rect.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+  // Позиционируем панель рядом с курсором или координатами клика
+  if (event) {
+    // Если у нас есть событие клика, используем его координаты
+    panel.style.left = (event.clientX + window.scrollX) + 'px';
+    panel.style.top = (event.clientY + window.scrollY - panel.offsetHeight - 5) + 'px';
+  } else if (lastClickPosition.x !== 0 || lastClickPosition.y !== 0) {
+    // Если нет события, но есть сохраненные координаты клика
+    panel.style.left = (lastClickPosition.x + window.scrollX) + 'px';
+    panel.style.top = (lastClickPosition.y + window.scrollY - panel.offsetHeight - 5) + 'px';
+  } else {
+    // Если нет ни события, ни сохраненных координат, используем координаты каретки
+    // Попытка получить координаты каретки
+    let cursorPos = getCursorCoordinates(inputElement);
+    if (cursorPos) {
+      panel.style.left = (cursorPos.left + window.scrollX) + 'px';
+      panel.style.top = (cursorPos.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+    } else {
+      // Запасной вариант: используем координаты элемента
+      const rect = inputElement.getBoundingClientRect();
+      panel.style.left = (rect.left + window.scrollX) + 'px';
+      panel.style.top = (rect.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+    }
+  }
   
   // Проверяем, не выходит ли панель за пределы экрана
   const panelRect = panel.getBoundingClientRect();
+  
+  // Если панель выходит за правый край экрана
+  if (panelRect.right > window.innerWidth) {
+    panel.style.left = (window.innerWidth - panelRect.width - 10) + 'px';
+  }
   
   // Если панель выходит за левый край экрана
   if (panelRect.left < 0) {
@@ -257,11 +287,70 @@ function showPastePanel(inputElement) {
   
   // Если панель выходит за верхний край экрана
   if (panelRect.top < 0) {
-    panel.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+    if (event) {
+      panel.style.top = (event.clientY + window.scrollY + 5) + 'px';
+    } else if (lastClickPosition.y !== 0) {
+      panel.style.top = (lastClickPosition.y + window.scrollY + 5) + 'px';
+    } else {
+      const rect = inputElement.getBoundingClientRect();
+      panel.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+    }
   }
   
   // Показываем панель
   panel.style.visibility = 'visible';
+}
+
+// Функция для получения координат текстового курсора
+function getCursorCoordinates(element) {
+  if (!element) return null;
+  
+  // Для input и textarea
+  if (element.matches('input, textarea')) {
+    // Создаем временный элемент для измерения
+    const temp = document.createElement('div');
+    temp.style.position = 'absolute';
+    temp.style.visibility = 'hidden';
+    temp.style.whiteSpace = 'pre';
+    temp.style.font = getComputedStyle(element).font;
+    temp.style.paddingLeft = getComputedStyle(element).paddingLeft;
+    temp.style.paddingTop = getComputedStyle(element).paddingTop;
+    
+    // Клонируем стили элемента
+    const styles = getComputedStyle(element);
+    for (const prop of ['width', 'height', 'fontSize', 'lineHeight', 'fontFamily']) {
+      temp.style[prop] = styles[prop];
+    }
+    
+    const text = element.value.substring(0, element.selectionStart);
+    temp.textContent = text || '.';
+    document.body.appendChild(temp);
+    
+    const rect = temp.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    
+    document.body.removeChild(temp);
+    
+    return {
+      left: elementRect.left + (text ? temp.offsetWidth : 0),
+      top: elementRect.top + temp.offsetHeight
+    };
+  }
+  
+  // Для contenteditable
+  if (element.matches('[contenteditable="true"]')) {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0).cloneRange();
+      const rect = range.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top
+      };
+    }
+  }
+  
+  return null;
 }
 
 // Обработчик клика на кнопку "Копировать"
@@ -381,19 +470,36 @@ selectAllButton.addEventListener('click', function() {
     panel.appendChild(pasteButton);
     panel.appendChild(deleteButton);
     
-    // Получаем координаты поля ввода
+    // Используем координаты элемента для позиционирования
     const rect = currentElement.getBoundingClientRect();
+    const selection = window.getSelection();
+    let panelX, panelY;
+    
+    if (selection.rangeCount > 0) {
+      // Используем координаты выделения
+      const range = selection.getRangeAt(0);
+      const selectionRect = range.getBoundingClientRect();
+      panelX = selectionRect.right + window.scrollX;
+      panelY = selectionRect.top + window.scrollY - panel.offsetHeight - 5;
+    } else {
+      // Используем координаты элемента
+      panelX = rect.right + window.scrollX;
+      panelY = rect.top + window.scrollY - panel.offsetHeight - 5;
+    }
     
     // Показываем панель для измерения размеров
     panel.style.display = 'flex';
     panel.style.visibility = 'hidden';
-    
-    // Позиционируем панель рядом с полем ввода
-    panel.style.left = rect.right + window.scrollX - panel.offsetWidth + 'px';
-    panel.style.top = (rect.top + window.scrollY - panel.offsetHeight - 5) + 'px';
+    panel.style.left = panelX + 'px';
+    panel.style.top = panelY + 'px';
     
     // Проверяем, не выходит ли панель за пределы экрана
     const panelRect = panel.getBoundingClientRect();
+    
+    // Если панель выходит за правый край экрана
+    if (panelRect.right > window.innerWidth) {
+      panel.style.left = (window.innerWidth - panelRect.width - 10) + 'px';
+    }
     
     // Если панель выходит за левый край экрана
     if (panelRect.left < 0) {
