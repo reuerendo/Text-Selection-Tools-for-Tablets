@@ -601,9 +601,43 @@ function fallbackCopy(text) {
 // Обработчик клика на кнопку "Поиск"
 searchButton.addEventListener('click', function() {
   const selectedText = window.getSelection().toString().trim();
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
-  window.open(searchUrl, '_blank');
-  panel.style.display = 'none';
+  
+  // Получаем настройки поисковой системы
+  browser.storage.local.get('searchEngine').then((result) => {
+    // По умолчанию используем Google
+    const searchEngine = result.searchEngine || 'google';
+    
+    // Определяем URL для поиска в зависимости от выбранной поисковой системы
+    let searchUrl = '';
+    switch (searchEngine) {
+      case 'bing':
+        searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(selectedText)}`;
+        break;
+      case 'duckduckgo':
+        searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(selectedText)}`;
+        break;
+      case 'qwant':
+        searchUrl = `https://www.qwant.com/?q=${encodeURIComponent(selectedText)}`;
+        break;
+      case 'ecosia':
+        searchUrl = `https://www.ecosia.org/search?q=${encodeURIComponent(selectedText)}`;
+        break;
+      case 'google':
+      default:
+        searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
+        break;
+    }
+    
+    window.open(searchUrl, '_blank');
+    panel.style.display = 'none';
+  }).catch((error) => {
+    console.error('Ошибка при получении настроек поисковой системы:', error);
+    
+    // В случае ошибки используем Google по умолчанию
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
+    window.open(searchUrl, '_blank');
+    panel.style.display = 'none';
+  });
 });
 
 // Обработчик клика на кнопку "Вставить"
