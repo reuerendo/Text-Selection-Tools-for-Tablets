@@ -3,6 +3,7 @@ let panel = document.createElement('div');
 panel.id = 'text-selection-panel';
 panel.style.display = 'none';
 document.body.appendChild(panel);
+let userInitiatedFocus = false;
 
 // Объявляем переменную для хранения текущих цветов темы
 let themeColors = {
@@ -203,6 +204,17 @@ function positionPanel(selection) {
   panel.style.visibility = 'visible';
 }
 
+// Добавьте этот код перед существующим обработчиком клика
+document.addEventListener('mousedown', function() {
+  userInitiatedFocus = true;
+  
+  // Сбросим флаг через небольшую задержку, 
+  // чтобы не влиять на текущую операцию, но быть готовыми к следующей загрузке страницы
+  setTimeout(() => {
+    userInitiatedFocus = false;
+  }, 1000);
+});
+
 // Обработчик для полей ввода (клик)
 document.addEventListener('click', function(event) {
   const target = event.target;
@@ -238,17 +250,20 @@ document.addEventListener('focus', function(event) {
     // Устанавливаем текущий элемент
     currentElement = target;
     
-    // Проверяем, есть ли выделенный текст
-    setTimeout(() => {
-      const selectedText = getSelectedTextFromElement(target);
-      if (selectedText && selectedText.length > 0) {
-        // Если текст выделен, показываем панель с кнопками для выделения в поле ввода
-        showInputSelectionPanel(window.getSelection());
-      } else {
-        // Если текст не выделен, показываем панель вставки, используя последние координаты клика
-        showPastePanel(target, null);
-      }
-    }, 100);
+    // Проверяем, был ли фокус инициирован пользователем
+    if (userInitiatedFocus) {
+      // Проверяем, есть ли выделенный текст
+      setTimeout(() => {
+        const selectedText = getSelectedTextFromElement(target);
+        if (selectedText && selectedText.length > 0) {
+          // Если текст выделен, показываем панель с кнопками для выделения в поле ввода
+          showInputSelectionPanel(window.getSelection());
+        } else {
+          // Если текст не выделен, показываем панель вставки, используя последние координаты клика
+          showPastePanel(target, null);
+        }
+      }, 100);
+    }
   }
 }, true);
 
@@ -747,6 +762,16 @@ document.addEventListener('dblclick', function(event) {
       }, 500);
     }, 100);
   }
+});
+
+// Добавьте этот код перед существующим обработчиком клавиатуры
+document.addEventListener('keydown', function() {
+  userInitiatedFocus = true;
+  
+  // Сбросим флаг через небольшую задержку
+  setTimeout(() => {
+    userInitiatedFocus = false;
+  }, 1000);
 });
 
 // Скрытие панели при нажатии Escape
