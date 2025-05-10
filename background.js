@@ -1,3 +1,18 @@
+// Флаг состояния расширения, по умолчанию включено
+let extensionEnabled = true;
+
+// Обработчик нажатия на иконку расширения
+browser.browserAction.onClicked.addListener(() => {
+  // Инвертируем текущее состояние
+  extensionEnabled = !extensionEnabled;
+  
+  // Сохраняем новое состояние
+  browser.storage.local.set({ enabled: extensionEnabled });
+  
+  // Обновляем состояние расширения
+  setExtensionState(extensionEnabled);
+});
+
 // Функция для открытия ссылки в новой фоновой вкладке после текущей
 function openInBackgroundTab(url) {
   // Получаем текущую вкладку для правильного размещения новой
@@ -13,6 +28,9 @@ function openInBackgroundTab(url) {
 
 // Получение темы и отправка цветов в content script
 function getAndSendThemeColors() {
+  // Если расширение отключено, не выполняем действие
+  if (!extensionEnabled) return;
+  
   browser.theme.getCurrent().then(theme => {
     const isDarkTheme = detectDarkTheme(theme);
     
@@ -92,31 +110,64 @@ function getAndSendThemeColors() {
       } : null;
     }
     
-    // Отправляем цвета во все открытые вкладки
+    // Отправляем цвета во все открытые вкладки, если расширение включено
+    if (extensionEnabled) {
+      browser.tabs.query({}).then(tabs => {
+        tabs.forEach(tab => {
+          browser.tabs.sendMessage(tab.id, {
+            action: "themeColors",
+            colors: colors
+          }).catch(() => {
+            // Игнорируем ошибки для вкладок, где нет нашего content script
+          });
+        });
+      });
+    }
+  });
+}
+
+// Функция для установки статуса расширения и обновления иконки
+function setExtensionState(enabled) {
+  extensionEnabled = enabled;
+  
+  // Обновляем иконку в зависимости от статуса
+  const iconPath = enabled ? "icons/icon.png" : "icons/icon_disabled.png";
+  browser.browserAction.setIcon({ path: iconPath });
+  
+  // Если включено, обновляем цвета темы, иначе отправляем сообщение об отключении
+  if (enabled) {
+    getAndSendThemeColors();
+  } else {
+    // Отправляем всем вкладкам сообщение о деактивации расширения
     browser.tabs.query({}).then(tabs => {
       tabs.forEach(tab => {
         browser.tabs.sendMessage(tab.id, {
-          action: "themeColors",
-          colors: colors
+          action: "extensionDisabled"
         }).catch(() => {
           // Игнорируем ошибки для вкладок, где нет нашего content script
         });
       });
     });
-  });
+  }
 }
+
+// Загружаем состояние при запуске
+browser.storage.local.get('enabled').then(result => {
+  // По умолчанию расширение включено, если настройка не найдена
+  const enabled = result.enabled !== undefined ? result.enabled : true;
+  setExtensionState(enabled);
+});
 
 // Слушаем изменения темы
 browser.theme.onUpdated.addListener(getAndSendThemeColors);
 
-// Получаем и отправляем цвета при загрузке фонового скрипта
-getAndSendThemeColors();
-
-// Слушаем запросы от content scripts на получение цветов темы
+// Слушаем запросы от content scripts и popup
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "getThemeColors") {
+  if (message.action === "getThemeColors" && extensionEnabled) {
     getAndSendThemeColors();
-  } else if (message.action === "openInBackgroundTab" && message.url) {
+  } else if (message.action === "openInBackgroundTab" && message.url && extensionEnabled) {
     openInBackgroundTab(message.url);
+  } else if (message.action === "toggleExtension") {
+    setExtensionState(message.enabled);
   }
 });
