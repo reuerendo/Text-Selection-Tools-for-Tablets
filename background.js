@@ -1,5 +1,33 @@
 // Флаг состояния расширения, по умолчанию включено
 let extensionEnabled = true;
+let defaultSearchEngine = null;
+
+// Получение поисковой системы по умолчанию
+function getDefaultSearchEngine() {
+  return browser.search.get().then(engines => {
+    // Находим поисковую систему, установленную по умолчанию
+    const defaultEngine = engines.find(engine => engine.isDefault);
+    if (defaultEngine) {
+      // Сохраняем информацию о поисковой системе по умолчанию
+      defaultSearchEngine = {
+        name: defaultEngine.name,
+        searchUrl: defaultEngine.searchUrl
+      };
+      
+      // Сохраняем в хранилище для доступа из content script
+      browser.storage.local.set({
+        searchEngine: defaultEngine.name,
+        currentSearchUrl: defaultEngine.searchUrl
+      });
+      
+      return defaultSearchEngine;
+    }
+    return null;
+  }).catch(error => {
+    console.error('Ошибка при получении поисковой системы по умолчанию:', error);
+    return null;
+  });
+}
 
 // Обработчик нажатия на иконку расширения
 browser.browserAction.onClicked.addListener(() => {
@@ -134,9 +162,10 @@ function setExtensionState(enabled) {
   const iconPath = enabled ? "icons/icon.png" : "icons/icon_disabled.png";
   browser.browserAction.setIcon({ path: iconPath });
   
-  // Если включено, обновляем цвета темы, иначе отправляем сообщение об отключении
+  // Если включено, обновляем цвета темы и получаем поисковую систему по умолчанию
   if (enabled) {
     getAndSendThemeColors();
+    getDefaultSearchEngine();
   } else {
     // Отправляем всем вкладкам сообщение о деактивации расширения
     browser.tabs.query({}).then(tabs => {
@@ -156,10 +185,43 @@ browser.storage.local.get('enabled').then(result => {
   // По умолчанию расширение включено, если настройка не найдена
   const enabled = result.enabled !== undefined ? result.enabled : true;
   setExtensionState(enabled);
+  
+  // Если расширение включено, получаем поисковую систему по умолчанию
+  if (enabled) {
+    getDefaultSearchEngine();
+  }
 });
 
 // Слушаем изменения темы
 browser.theme.onUpdated.addListener(getAndSendThemeColors);
+
+// Функция для отправки информации о поисковой системе по умолчанию всем вкладкам
+function broadcastDefaultSearchEngine() {
+  if (!extensionEnabled || !defaultSearchEngine) return;
+  
+  browser.tabs.query({}).then(tabs => {
+    tabs.forEach(tab => {
+      browser.tabs.sendMessage(tab.id, {
+        action: "defaultSearchEngine",
+        searchEngine: defaultSearchEngine.name,
+        searchUrl: defaultSearchEngine.searchUrl
+      }).catch(() => {
+        // Игнорируем ошибки для вкладок, где нет нашего content script
+      });
+    });
+  });
+}
+
+// Функция для открытия URL поиска с выделенным текстом
+function openSearchURL(searchUrl, selectedText) {
+  if (!searchUrl || !selectedText) return;
+  
+  // Заменяем плейсхолдер "%s" на выделенный текст
+  const finalUrl = searchUrl.replace('%s', encodeURIComponent(selectedText));
+  
+  // Открываем URL в новой фоновой вкладке
+  openInBackgroundTab(finalUrl);
+}
 
 // Слушаем запросы от content scripts и popup
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -169,5 +231,56 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     openInBackgroundTab(message.url);
   } else if (message.action === "toggleExtension") {
     setExtensionState(message.enabled);
+  } else if (message.action === "getDefaultSearchEngine" && extensionEnabled) {
+    // Если запрос содержит выделенный текст, это запрос на поиск
+    if (message.selectedText) {
+      // Обновляем информацию о поисковой системе и выполняем поиск
+      return getDefaultSearchEngine().then(engine => {
+        if (engine && engine.searchUrl) {
+          // Выполняем поиск с использованием URL из поисковой системы
+          openSearchURL(engine.searchUrl, message.selectedText);
+          return { success: true };
+        }
+        return { success: false };
+      });
+    } 
+    // Иначе это просто запрос на получение информации о поисковой системе
+    else {
+      // Обновляем информацию о поисковой системе перед отправкой
+      getDefaultSearchEngine().then(engine => {
+        if (engine) {
+          console.log("Отправляем данные о поисковой системе:", engine);
+          
+          // Сохраняем в локальное хранилище для быстрого доступа
+          browser.storage.local.set({
+            searchEngine: engine.name, 
+            currentSearchUrl: engine.searchUrl
+          });
+          
+          // Отправляем информацию отправителю запроса
+          if (sender.tab) {
+            browser.tabs.sendMessage(sender.tab.id, {
+              action: "defaultSearchEngine",
+              searchEngine: engine.name, 
+              searchUrl: engine.searchUrl
+            }).catch(error => {
+              console.error('Ошибка при отправке данных о поисковой системе:', error);
+            });
+          }
+        }
+      });
+      
+      // Возвращаем true для асинхронного обработчика сообщений
+      return true;
+    }
+  }
+});
+
+// Подписываемся на события изменения настроек поиска
+browser.search?.settings?.onChange?.addListener(() => {
+  if (extensionEnabled) {
+    getDefaultSearchEngine().then(() => {
+      broadcastDefaultSearchEngine();
+    });
   }
 });
