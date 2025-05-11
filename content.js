@@ -398,28 +398,62 @@ selectAllButton.addEventListener('click', function() {
   }, 100);
 });
 
+// Обработчик нажатия на кнопку поиска
 searchButton.addEventListener('click', function() {
   const selectedText = window.getSelection().toString().trim();
-  browser.storage.local.get('searchEngine').then((result) => {
-    const searchEngine = result.searchEngine || 'google';
-    let searchUrl = '';
+  
+  // Запрашиваем информацию о поисковой системе и выполняем поиск только после получения ответа
+  browser.runtime.sendMessage({ 
+    action: "getDefaultSearchEngine",
+    selectedText: selectedText  // Передаем выделенный текст в фоновый скрипт
+  }).then(response => {
+    // Скрываем панель после отправки запроса
+    panel.style.display = 'none';
+  }).catch(error => {
+    console.error('Ошибка при отправке запроса на поиск:', error);
+    panel.style.display = 'none';
+  });
+});
+
+// Добавляем обработчик сообщений для получения информации о поисковой системе по умолчанию
+browser.runtime.onMessage.addListener((message) => {
+  if (message.action === "themeColors" && message.colors) {
+    extensionEnabled = true;
+    themeColors = message.colors;
+    updateColors();
+    applyInitialStyles();
+  } else if (message.action === "extensionDisabled") {
+    extensionEnabled = false;
+    panel.style.display = 'none';
+  } else if (message.action === "defaultSearchEngine") {
+    console.log("Получены данные о поисковой системе:", message);
     
-    switch (searchEngine) {
-      case 'bing': searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(selectedText)}`; break;
-      case 'duckduckgo': searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(selectedText)}`; break;
-      case 'qwant': searchUrl = `https://www.qwant.com/?q=${encodeURIComponent(selectedText)}`; break;
-      case 'ecosia': searchUrl = `https://www.ecosia.org/search?q=${encodeURIComponent(selectedText)}`; break;
-      case 'google':
-      default: searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`; break;
+    // Сохраняем полученную информацию о поисковой системе по умолчанию
+    browser.storage.local.set({
+      searchEngine: message.searchEngine,
+      currentSearchUrl: message.searchUrl
+    }).then(() => {
+      console.log("Данные о поисковой системе сохранены успешно");
+    }).catch(error => {
+      console.error("Ошибка при сохранении данных:", error);
+    });
+  }
+});
+
+// При загрузке страницы запрашиваем информацию о поисковой системе по умолчанию
+document.addEventListener('DOMContentLoaded', function() {
+  // Запрашиваем свежие данные о поисковой системе
+  browser.runtime.sendMessage({ action: "getDefaultSearchEngine" });
+  
+  // Также при инициализации проверяем, есть ли данные уже в хранилище
+  browser.storage.local.get(['searchEngine', 'currentSearchUrl']).then(result => {
+    console.log("Инициализация с данными из хранилища:", result);
+    // Если данные отсутствуют, повторно запрашиваем их
+    if (!result.searchEngine || !result.currentSearchUrl) {
+      setTimeout(() => {
+        browser.runtime.sendMessage({ action: "getDefaultSearchEngine" });
+      }, 500);
     }
-    
-    window.open(searchUrl, '_blank');
-    panel.style.display = 'none';
-  }).catch((error) => {
-    console.error('Ошибка при получении настроек поисковой системы:', error);
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(selectedText)}`;
-    window.open(searchUrl, '_blank');
-    panel.style.display = 'none';
   });
 });
 
