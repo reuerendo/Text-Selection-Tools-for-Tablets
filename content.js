@@ -18,16 +18,11 @@ let lastClickPosition = { x: 0, y: 0 };
 let selectionPanelTimer = null;
 let inputPanelTimer = null;
 let isEditing = false;
-
-// Новые переменные для улучшенного позиционирования
 let cursorPosition = { x: 0, y: 0 };
 let isSelectAllActive = false;
-
-// Хранение положения панели ввода для сохранения при "Выделить все"
 let inputPanelPosition = { x: 0, y: 0 };
-
-// Флаг для отслеживания первого нажатия
 let firstClickProcessed = false;
+let isPasting = false;
 
 // 2. НАСТРОЙКИ ТЕМЫ
 let themeColors = {
@@ -48,7 +43,9 @@ const messages = {
   searchButtonText: browser.i18n.getMessage("searchButtonText") || "Search",
   pasteButtonText: browser.i18n.getMessage("pasteButtonText") || "Paste",
   selectAllButtonText: browser.i18n.getMessage("selectAllButtonText") || "Select all",
-  pasteAlertText: browser.i18n.getMessage("pasteAlertText") || "To paste, please use Ctrl+V keyboard shortcut"
+  pasteAlertText: browser.i18n.getMessage("pasteAlertText") || "To paste, please use Ctrl+V keyboard shortcut",
+  cutButtonText: browser.i18n.getMessage("cutButtonText") || "Вырезать",
+  deleteButtonText: browser.i18n.getMessage("deleteButtonText") || "Удалить"
 };
 
 // 4. СОЗДАНИЕ ЭЛЕМЕНТОВ ИНТЕРФЕЙСА
@@ -59,29 +56,38 @@ const createButton = (text) => {
   return button;
 };
 
-// Кнопки для панели выделения текста
+// Создаем кнопки
 const copyButton = createButton(messages.copyButtonText);
 const searchButton = createButton(messages.searchButtonText);
-
-// Кнопки для панели ввода
 const pasteButton = createButton(messages.pasteButtonText);
 const selectAllButton = createButton(messages.selectAllButtonText);
-const cutButton = createButton(browser.i18n.getMessage("cutButtonText") || "Вырезать");
+const cutButton = createButton(messages.cutButtonText);
 const copyButtonForInput = createButton(messages.copyButtonText);
-const deleteButton = createButton(browser.i18n.getMessage("deleteButtonText") || "Удалить");
+const deleteButton = createButton(messages.deleteButtonText);
 
 const selectionButtons = [copyButton, searchButton];
 const inputButtons = [pasteButton, selectAllButton];
-const allButtons = [...selectionButtons, ...inputButtons];
+const allButtons = [...selectionButtons, ...inputButtons, cutButton, copyButtonForInput, deleteButton];
 
 // 5. УПРАВЛЕНИЕ ТЕМОЙ
-function applyInitialStyles() {
-  [selectionPanel, inputPanel].forEach(panel => {
-    panel.style.backgroundColor = themeColors.toolbar.bgcolor;
-    panel.style.color = themeColors.toolbar.color;
-    panel.style.borderColor = themeColors.toolbar.border;
-  });
+function applyButtonStyles(button) {
+  button.style.color = themeColors.toolbar.color;
+  button.style.backgroundColor = "transparent";
   
+  button.onmouseenter = () => button.style.backgroundColor = themeColors.button.hover;
+  button.onmouseleave = () => button.style.backgroundColor = "transparent";
+  button.onmousedown = () => button.style.backgroundColor = themeColors.button.active;
+  button.onmouseup = () => button.style.backgroundColor = themeColors.button.hover;
+}
+
+function applyPanelStyles(panel) {
+  panel.style.backgroundColor = themeColors.toolbar.bgcolor;
+  panel.style.color = themeColors.toolbar.color;
+  panel.style.borderColor = themeColors.toolbar.border;
+}
+
+function applyInitialStyles() {
+  [selectionPanel, inputPanel].forEach(applyPanelStyles);
   allButtons.forEach(button => {
     button.style.color = themeColors.toolbar.color;
     button.style.backgroundColor = "transparent";
@@ -89,32 +95,20 @@ function applyInitialStyles() {
 }
 
 function updateColors() {
-  [selectionPanel, inputPanel].forEach(panel => {
-    panel.style.backgroundColor = themeColors.toolbar.bgcolor;
-    panel.style.color = themeColors.toolbar.color;
-    panel.style.borderColor = themeColors.toolbar.border;
-  });
+  [selectionPanel, inputPanel].forEach(applyPanelStyles);
   
   allButtons.forEach(button => {
-    button.style.color = themeColors.toolbar.color;
-    button.style.backgroundColor = "transparent";
-    
     button.onmouseenter = null;
     button.onmouseleave = null;
     button.onmousedown = null;
     button.onmouseup = null;
-    
-    button.onmouseenter = () => button.style.backgroundColor = themeColors.button.hover;
-    button.onmouseleave = () => button.style.backgroundColor = "transparent";
-    button.onmousedown = () => button.style.backgroundColor = themeColors.button.active;
-    button.onmouseup = () => button.style.backgroundColor = themeColors.button.hover;
+    applyButtonStyles(button);
   });
 }
 
 // 6. ОСНОВНЫЕ ФУНКЦИИ РАБОТЫ С ТЕКСТОМ
 function getSelectedTextFromElement(element) {
-  if (!element) return '';
-  if (typeof element.matches !== 'function') return '';
+  if (!element || typeof element.matches !== 'function') return '';
   
   if (element.matches('input, textarea')) {
     return element.value.substring(element.selectionStart, element.selectionEnd);
@@ -171,8 +165,7 @@ function fallbackCopy(text) {
 
 // 7. ПОЗИЦИОНИРОВАНИЕ ПАНЕЛЕЙ
 function getCursorCoordinates(element) {
-  if (!element) return null;
-  if (typeof element.matches !== 'function') return null;
+  if (!element || typeof element.matches !== 'function') return null;
   
   if (element.matches('input, textarea')) {
     try {
@@ -186,14 +179,10 @@ function getCursorCoordinates(element) {
                      'padding', 'paddingLeft', 'paddingTop', 'paddingRight', 'paddingBottom', 
                      'border', 'borderLeft', 'borderTop', 'borderRight', 'borderBottom'];
       
-      props.forEach(prop => {
-        temp.style[prop] = styles[prop];
-      });
+      props.forEach(prop => temp.style[prop] = styles[prop]);
       
-      let text = '';
-      if (typeof element.selectionStart !== 'undefined') {
-        text = element.value.substring(0, element.selectionStart);
-      }
+      const text = typeof element.selectionStart !== 'undefined' ? 
+                   element.value.substring(0, element.selectionStart) : '';
       temp.textContent = text || '.';
       document.body.appendChild(temp);
       
@@ -239,7 +228,12 @@ function getCursorCoordinates(element) {
   };
 }
 
-// Функция для позиционирования панели ввода
+// Функция для добавления кнопок на панель
+function addButton(panel, button) {
+  panel.appendChild(button);
+}
+
+// Обновление функции для позиционирования панели ввода
 function positionInputPanel(element, event) {
   // Если был активирован Select All, сохраняем позицию панели
   if (isSelectAllActive) {
@@ -248,22 +242,22 @@ function positionInputPanel(element, event) {
     return;
   }
   
+  // Устанавливаем сразу нужное состояние
   inputPanel.style.display = 'flex';
-  inputPanel.style.visibility = 'hidden';
   
   let panelX, panelY;
   
   if (event) {
     panelX = event.clientX + window.scrollX - (inputPanel.offsetWidth / 2);
-    panelY = event.clientY + window.scrollY - inputPanel.offsetHeight - 20; // 20px выше курсора
+    panelY = event.clientY + window.scrollY - inputPanel.offsetHeight - 10;
   } else if (cursorPosition.x || cursorPosition.y) {
     panelX = cursorPosition.x + window.scrollX - (inputPanel.offsetWidth / 2);
-    panelY = cursorPosition.y + window.scrollY - inputPanel.offsetHeight - 20;
+    panelY = cursorPosition.y + window.scrollY - inputPanel.offsetHeight - 10;
   } else {
     const coords = getCursorCoordinates(element);
     if (coords) {
       panelX = coords.left - (inputPanel.offsetWidth / 2);
-      panelY = coords.top - inputPanel.offsetHeight - 20;
+      panelY = coords.top - inputPanel.offsetHeight - 10;
     } else {
       const rect = element.getBoundingClientRect();
       panelX = rect.left + window.scrollX + (rect.width / 2) - (inputPanel.offsetWidth / 2);
@@ -271,10 +265,8 @@ function positionInputPanel(element, event) {
     }
   }
   
-  if (panelX < 0) panelX = 10;
-  if (panelX + inputPanel.offsetWidth > window.innerWidth) {
-    panelX = window.innerWidth - inputPanel.offsetWidth - 10;
-  }
+  // Предотвращаем выход панели за пределы экрана
+  panelX = Math.max(10, Math.min(window.innerWidth - inputPanel.offsetWidth - 10, panelX));
   
   if (panelY < 0) {
     const rect = element.getBoundingClientRect();
@@ -287,16 +279,14 @@ function positionInputPanel(element, event) {
   inputPanelPosition.x = parseInt(inputPanel.style.left);
   inputPanelPosition.y = parseInt(inputPanel.style.top);
   
-  inputPanel.style.visibility = 'visible';
+  // Добавляем класс для видимости
+  inputPanel.classList.add('panel-show');
 }
 
 // Функция для позиционирования панели выделения
 function positionSelectionPanel(selection) {
-  const range = selection.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
-  
+  // Устанавливаем сразу отображение без начальной анимации
   selectionPanel.style.display = 'flex';
-  selectionPanel.style.visibility = 'hidden';
   
   const endRange = document.createRange();
   endRange.setStart(selection.focusNode, selection.focusOffset);
@@ -309,64 +299,85 @@ function positionSelectionPanel(selection) {
   if (panelRect.right > window.innerWidth) selectionPanel.style.left = (window.innerWidth - panelRect.width - 10) + 'px';
   if (panelRect.top < 0) selectionPanel.style.top = (endRect.bottom + window.scrollY + 5) + 'px';
   
-  selectionPanel.style.visibility = 'visible';
+  // Добавляем класс для видимости
+  selectionPanel.classList.add('panel-show');
 }
 
 // 8. ПОКАЗ РАЗЛИЧНЫХ ТИПОВ ПАНЕЛЕЙ
 function showSelectionPanel(selection) {
   if (!extensionEnabled) return;
   
+  // Очищаем содержимое панели
   selectionPanel.innerHTML = '';
-  selectionPanel.appendChild(copyButton);
-  selectionPanel.appendChild(searchButton);
+  
+  // Добавляем кнопки без анимации
+  addButton(selectionPanel, copyButton);
+  addButton(selectionPanel, searchButton);
+  
+  // Устанавливаем display: flex, но удаляем класс panel-show для начального состояния
+  selectionPanel.style.display = 'flex';
+  selectionPanel.classList.remove('panel-show');
+  
+  // Позиционируем панель
   positionSelectionPanel(selection);
 }
 
+// Функция проверки валидности поля ввода
+function isValidInputField(element) {
+  if (!element || typeof element.matches !== 'function') return false;
+  
+  return element.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="reset"]):not([type="image"]), textarea')
+    || (element.matches('[contenteditable="true"]') && !element.closest('button, a, .button, [role="button"]'))
+    || (element.tagName && element.tagName.toLowerCase() === 'div' && element.getAttribute('role') === 'textbox');
+}
+
+// Функция для показа панели ввода
 function showInputPanel(inputElement, event) {
-  if (!extensionEnabled || !inputElement || typeof inputElement.matches !== 'function' || isEditing) return;
+  if (!extensionEnabled || !inputElement || !isValidInputField(inputElement) || isEditing) return;
   
+  currentElement = inputElement;
+  
+  // Очищаем содержимое панели
   inputPanel.innerHTML = '';
-  inputPanel.appendChild(pasteButton);
   
-  const hasText = (inputElement.value && inputElement.value.length > 0) || 
-                 (inputElement.textContent && inputElement.textContent.trim().length > 0);
-  if (hasText) inputPanel.appendChild(selectAllButton);
+  // Добавляем кнопки без анимации
+  addButton(inputPanel, pasteButton);
   
+  const hasText = 
+    (inputElement.value && inputElement.value.length > 0) || 
+    (inputElement.textContent && inputElement.textContent.trim().length > 0);
+  
+  if (hasText) {
+    // Добавляем кнопку "Выделить все"
+    addButton(inputPanel, selectAllButton);
+  }
+  
+  // Устанавливаем display: flex, но удаляем класс panel-show для начального состояния
+  inputPanel.style.display = 'flex';
+  inputPanel.classList.remove('panel-show');
+  
+  // Позиционируем панель
   positionInputPanel(inputElement, event);
 }
 
-// Обработчик события input для отслеживания редактирования
-document.addEventListener('input', event => {
-  const target = event.target;
-  
-  if (target && typeof target.matches === 'function') {
-    const isInputField = target.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
-    
-    if (isInputField) {
-      isEditing = true;
-      inputPanel.style.display = 'none';
-      
-      // Сбрасываем состояние редактирования через короткий промежуток времени
-      // после прекращения ввода
-      if (inputPanelTimer) clearTimeout(inputPanelTimer);
-      
-      inputPanelTimer = setTimeout(() => {
-        isEditing = false;
-      }, 2000); // Ждем 2 секунды после последнего ввода
-    }
+// Функция скрытия панелей
+function hidePanels(exceptForSelectAll = false) {
+  if (selectionPanel.style.display !== 'none') {
+    selectionPanel.style.display = 'none';
   }
-});
+  
+  if (inputPanel.style.display !== 'none' && (!exceptForSelectAll || !isSelectAllActive)) {
+    inputPanel.style.display = 'none';
+    if (isSelectAllActive) isSelectAllActive = false;
+  }
+}
 
 // 9. ОБРАБОТЧИКИ КНОПОК
-let isPasting = false;
-
 copyButton.addEventListener('click', () => {
   const selectedText = window.getSelection().toString().trim();
   
   navigator.clipboard.writeText(selectedText)
-    .then(() => {
-      selectionPanel.style.display = 'none';
-    })
+    .then(() => selectionPanel.style.display = 'none')
     .catch(err => {
       console.error('Ошибка при копировании в буфер обмена, использую запасной вариант: ', err);
       fallbackCopy(selectedText);
@@ -398,9 +409,7 @@ pasteButton.addEventListener('click', () => {
         pasteTextToElement(currentElement, text);
         inputPanel.style.display = 'none';
         
-        setTimeout(() => {
-          isPasting = false;
-        }, 500);
+        setTimeout(() => isPasting = false, 500);
       })
       .catch(err => {
         console.error('Ошибка при чтении буфера обмена: ', err);
@@ -414,14 +423,12 @@ pasteButton.addEventListener('click', () => {
   }
 });
 
-// Обновленный обработчик для кнопки "Выделить все"
+// Обработчик для кнопки "Выделить все"
 selectAllButton.addEventListener('click', (event) => {
   event.preventDefault();
   event.stopPropagation();
   
-  if (!currentElement) {
-    return;
-  }
+  if (!currentElement) return;
   
   isSelectAllActive = true;
   
@@ -436,14 +443,14 @@ selectAllButton.addEventListener('click', (event) => {
   }
   
   inputPanel.innerHTML = '';
-  inputPanel.appendChild(copyButtonForInput);
-  inputPanel.appendChild(cutButton);
-  inputPanel.appendChild(pasteButton);
-  inputPanel.appendChild(deleteButton);
   
-  setTimeout(() => {
-    inputPanel.style.display = 'flex';
-  }, 10);
+  // Добавляем кнопки для режима выделения
+  [copyButtonForInput, cutButton, pasteButton, deleteButton].forEach(btn => addButton(inputPanel, btn));
+  
+  // Устанавливаем параметры панели
+  inputPanel.style.width = 'auto';
+  inputPanel.style.display = 'flex';
+  inputPanel.classList.add('panel-show');
 });
 
 copyButtonForInput.addEventListener('click', () => {
@@ -472,7 +479,6 @@ copyButtonForInput.addEventListener('click', () => {
     .catch(err => {
       console.error('Ошибка при копировании текста в буфер обмена, использую запасной вариант: ', err);
       fallbackCopy(selectedText);
-      
       isSelectAllActive = false;
       inputPanel.style.display = 'none';
     });
@@ -500,7 +506,6 @@ cutButton.addEventListener('click', () => {
           currentElement.value.substring(end);
         
         currentElement.selectionStart = currentElement.selectionEnd = start;
-        
         currentElement.dispatchEvent(new Event('input', { bubbles: true }));
         
         isSelectAllActive = false;
@@ -508,7 +513,6 @@ cutButton.addEventListener('click', () => {
       })
       .catch(err => {
         console.error('Ошибка при вырезании в буфер обмена: ', err);
-        
         isSelectAllActive = false;
         inputPanel.style.display = 'none';
       });
@@ -518,13 +522,11 @@ cutButton.addEventListener('click', () => {
     navigator.clipboard.writeText(selectedText)
       .then(() => {
         document.execCommand('delete');
-        
         isSelectAllActive = false;
         inputPanel.style.display = 'none';
       })
       .catch(err => {
         console.error('Ошибка при вырезании contenteditable в буфер обмена: ', err);
-        
         isSelectAllActive = false;
         inputPanel.style.display = 'none';
       });
@@ -547,7 +549,6 @@ deleteButton.addEventListener('click', () => {
       currentElement.value.substring(end);
     
     currentElement.selectionStart = currentElement.selectionEnd = start;
-    
     currentElement.dispatchEvent(new Event('input', { bubbles: true }));
   } else if (currentElement.matches('[contenteditable="true"]')) {
     document.execCommand('delete');
@@ -555,7 +556,7 @@ deleteButton.addEventListener('click', () => {
   
   isSelectAllActive = false;
   inputPanel.style.display = 'none';
-})
+});
 
 // 10. ОБРАБОТЧИКИ СОБЫТИЙ DOM
 document.addEventListener('mousedown', event => {
@@ -568,15 +569,11 @@ document.addEventListener('mousedown', event => {
   // Сбрасываем флаг первого нажатия при начале нового взаимодействия
   firstClickProcessed = false;
   
-  setTimeout(() => {
-    userInitiatedFocus = false;
-  }, 1000);
+  setTimeout(() => userInitiatedFocus = false, 1000);
 });
 
 document.addEventListener('selectionchange', () => {
-  if (isSelectAllActive) {
-    return;
-  }
+  if (isSelectAllActive) return;
   
   selectionPanel.style.display = 'none';
   
@@ -598,31 +595,19 @@ document.addEventListener('selectionchange', () => {
   }, 200);
 });
 
-function isValidInputField(element) {
-  if (!element || typeof element.matches !== 'function') return false;
+// Обработчик события input для отслеживания редактирования
+document.addEventListener('input', event => {
+  const target = event.target;
   
-  return element.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="reset"]):not([type="image"]), textarea')
-    || (element.matches('[contenteditable="true"]') && !element.closest('button, a, .button, [role="button"]'))
-    || (element.tagName && element.tagName.toLowerCase() === 'div' && element.getAttribute('role') === 'textbox');
-}
-
-// Улучшенная функция для показа панели ввода
-function showInputPanel(inputElement, event) {
-  if (!extensionEnabled || !inputElement || !isValidInputField(inputElement) || isEditing) return;
-  
-  currentElement = inputElement;
-  
-  inputPanel.innerHTML = '';
-  inputPanel.appendChild(pasteButton);
-  
-  const hasText = 
-    (inputElement.value && inputElement.value.length > 0) || 
-    (inputElement.textContent && inputElement.textContent.trim().length > 0);
-  
-  if (hasText) inputPanel.appendChild(selectAllButton);
-  
-  positionInputPanel(inputElement, event);
-}
+  if (target && typeof target.matches === 'function' && 
+      target.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')) {
+    isEditing = true;
+    inputPanel.style.display = 'none';
+    
+    if (inputPanelTimer) clearTimeout(inputPanelTimer);
+    inputPanelTimer = setTimeout(() => isEditing = false, 2000);
+  }
+});
 
 document.addEventListener('click', event => {
   const target = event.target;
@@ -631,31 +616,17 @@ document.addEventListener('click', event => {
   const clickedInInputPanel = inputPanel.contains(target);
   
   if (!clickedInSelectionPanel && !clickedInInputPanel) {
-    if (selectionPanel.style.display !== 'none') {
-      selectionPanel.style.display = 'none';
-    }
-    
-    if (inputPanel.style.display !== 'none' && !isSelectAllActive) {
-      inputPanel.style.display = 'none';
-    } else if (inputPanel.style.display !== 'none' && isSelectAllActive) {
-      isSelectAllActive = false;
-      inputPanel.style.display = 'none';
-    }
+    hidePanels(true);
   }
   
   if (!target) return;
   
   if (isValidInputField(target) && !isPasting && !isEditing && !isSelectAllActive) {
     currentElement = target;
-    
-    // Обрабатываем нажатие на поле ввода
-    // Устанавливаем флаг firstClickProcessed в true
     firstClickProcessed = true;
     
     setTimeout(() => {
-      if (isPasting || isEditing || isSelectAllActive) {
-        return;
-      }
+      if (isPasting || isEditing || isSelectAllActive) return;
       showInputPanel(target, event);
     }, 100);
   }
@@ -668,51 +639,35 @@ document.addEventListener('focus', event => {
   if (userInitiatedFocus && isValidInputField(target) && !isPasting && !isEditing && !isSelectAllActive) {
     currentElement = target;
     
-    // Важно: теперь всегда показываем панель при фокусе на элемент
     setTimeout(() => {
-      if (isPasting || isEditing || isSelectAllActive) {
-        return;
-      }
-      
-      // Показываем панель независимо от того, было ли первое нажатие
+      if (isPasting || isEditing || isSelectAllActive) return;
       showInputPanel(target, null);
     }, 200);
   }
 }, true);
 
-// Новый обработчик для mouseup - показывает панель даже при первом клике
+// Обработчик для mouseup - показывает панель даже при первом клике
 document.addEventListener('mouseup', event => {
   const target = event.target;
   
-  // Проверка валидности поля ввода и отсутствия активных операций
   if (isValidInputField(target) && !isPasting && !isEditing && !isSelectAllActive) {
     currentElement = target;
     
-    // Если у элемента есть текст, показываем панель
     const hasText = 
       (target.value && target.value.length > 0) || 
       (target.textContent && target.textContent.trim().length > 0);
     
     if (hasText) {
       setTimeout(() => {
-        if (isPasting || isEditing || isSelectAllActive) {
-          return;
-        }
+        if (isPasting || isEditing || isSelectAllActive) return;
         showInputPanel(target, event);
       }, 100);
     }
   }
 });
 
-window.addEventListener('scroll', () => {
-  if (selectionPanel.style.display !== 'none') {
-    selectionPanel.style.display = 'none';
-  }
-  
-  if (inputPanel.style.display !== 'none' && !isSelectAllActive) {
-    inputPanel.style.display = 'none';
-  }
-}, true);
+// Обработчик прокрутки
+window.addEventListener('scroll', () => hidePanels(), true);
 
 // 11. ИНИЦИАЛИЗАЦИЯ И ВЗАИМОДЕЙСТВИЕ С BACKGROUND SCRIPT
 document.addEventListener('DOMContentLoaded', () => {
@@ -727,15 +682,13 @@ browser.runtime.onMessage.addListener((message) => {
     applyInitialStyles();
   } else if (message.action === "extensionDisabled") {
     extensionEnabled = false;
-    selectionPanel.style.display = 'none';
-    inputPanel.style.display = 'none';
+    hidePanels();
   }
 });
 
 browser.storage.local.get('enabled').then(result => {
-  if (result.enabled === false) {
-    extensionEnabled = false;
-  } else {
+  extensionEnabled = result.enabled !== false;
+  if (extensionEnabled) {
     browser.runtime.sendMessage({ action: "getThemeColors" });
   }
 });
