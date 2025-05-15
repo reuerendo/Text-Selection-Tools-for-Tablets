@@ -1,60 +1,48 @@
-// Флаг для отслеживания двойного клика
+// Переменные состояния
 let isDoubleClick = false;
 let singleClickTimer = null;
 
-// Функция проверки, является ли ссылка "действительной страницей" или кнопкой-ссылкой
+// Объединенный обработчик для проверки ссылок
 function isNavigationLink(link) {
-  // Проверяем, что ссылка ведет на страницу
+  if (!link || !link.href) return false;
+  
   const url = link.href;
   
-  // Исключаем javascript: ссылки, якоря и "пустые" ссылки
-  if (url.startsWith('javascript:') || url === '#' || url.startsWith(window.location.origin + '#')) {
+  // Быстрые проверки исключений
+  if (url.startsWith('javascript:') || 
+      url === '#' || 
+      url.startsWith(window.location.origin + '#') ||
+      url.includes('/ajax-') || 
+      url.includes('/api/') || 
+      url.includes('?ajax=') ||
+      link.getAttribute('role') === 'button') {
     return false;
   }
   
-  // Проверяем наличие AJAX в URL (это часто указывает на функциональные ссылки)
-  if (url.includes('/ajax-') || url.includes('/api/') || url.includes('?ajax=')) {
-    return false;
-  }
-  
-  // Проверяем дополнительные атрибуты, которые могут указывать на "кнопку-ссылку"
-  const role = link.getAttribute('role');
-  if (role === 'button') {
-    return false;
-  }
-  
-  // Если есть класс или id, которые содержат слово button, toggle, считаем кнопкой
+  // Эффективная проверка классов и ID через регулярное выражение
   const classesAndId = (link.className + ' ' + link.id).toLowerCase();
-  const functionalClasses = ['button', 'toggle', 'btn', 'favorite', 'add-to', 'remove-from', 'like', 'action'];
-  
-  for (const keyword of functionalClasses) {
-    if (classesAndId.includes(keyword)) {
-      return false;
-    }
-  }
-  
-  // Проверка на иконки FontAwesome (часто используются в кнопках)
-  if (link.querySelector('.fa, .fas, .far, .fal, .fab, [class*="fa-"]')) {
+  const functionalPattern = /button|toggle|btn|favorite|add-to|remove-from|like|action/;
+  if (functionalPattern.test(classesAndId)) {
     return false;
   }
   
-  return true;
+  // Проверка на иконки FontAwesome
+  return !link.querySelector('.fa, .fas, .far, .fal, .fab, [class*="fa-"]');
 }
 
-// Отслеживаем нажатие клавиш для обработки Ctrl/Cmd+click и middle-click
+// Обработчик одиночного клика
 document.addEventListener('click', (event) => {
   const target = event.target.closest('a');
-  if (!target || !target.href) return;
   
-  // Проверяем, что это ссылка для навигации, а не кнопка
+  // Быстрый возврат если нет подходящей ссылки
   if (!isNavigationLink(target)) return;
   
-  // Проверяем случаи, когда не нужно вмешиваться в стандартное поведение:
-  // 1. Нажата клавиша Ctrl/Cmd (открытие в новой вкладке)
-  // 2. Нажата средняя кнопка мыши (открытие в новой вкладке)
-  // 3. У ссылки указан target="_blank" (открытие в новой вкладке)
-  if (event.ctrlKey || event.metaKey || event.which === 2 || target.getAttribute('target') === '_blank') {
-    return; // Не вмешиваемся, позволяем браузеру обработать стандартное поведение
+  // Пропускаем обработку если это открытие в новой вкладке
+  if (event.ctrlKey || 
+      event.metaKey || 
+      event.which === 2 || 
+      target.getAttribute('target') === '_blank') {
+    return;
   }
   
   // Если это часть двойного клика, не делаем ничего
@@ -64,13 +52,12 @@ document.addEventListener('click', (event) => {
     return false;
   }
   
-  // При одиночном клике устанавливаем таймер для навигации
+  // Обработка одиночного клика
   event.preventDefault();
   event.stopPropagation();
   
   clearTimeout(singleClickTimer);
   singleClickTimer = setTimeout(() => {
-    // Обычная навигация через 300мс если не было второго клика
     if (!isDoubleClick) {
       window.location.href = target.href;
     }
@@ -82,9 +69,8 @@ document.addEventListener('click', (event) => {
 // Обработчик двойного клика
 document.addEventListener('dblclick', (event) => {
   const target = event.target.closest('a');
-  if (!target || !target.href) return;
   
-  // Проверяем, что это ссылка для навигации, а не кнопка
+  // Быстрый возврат если нет подходящей ссылки
   if (!isNavigationLink(target)) return;
   
   // Отмечаем как двойной клик и отменяем таймер одиночного клика
@@ -95,11 +81,19 @@ document.addEventListener('dblclick', (event) => {
   event.preventDefault();
   event.stopPropagation();
   
-  // Открываем в фоновой вкладке
-  browser.runtime.sendMessage({
-    action: "openInBackgroundTab",
-    url: target.href
-  });
+  // Проверка доступности API browser перед вызовом
+  if (typeof browser !== 'undefined' && browser.runtime && browser.runtime.sendMessage) {
+    browser.runtime.sendMessage({
+      action: "openInBackgroundTab",
+      url: target.href
+    });
+  } else if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    // Поддержка Chrome
+    chrome.runtime.sendMessage({
+      action: "openInBackgroundTab",
+      url: target.href
+    });
+  }
   
   // Сбрасываем флаг двойного клика через небольшую задержку
   setTimeout(() => {
@@ -108,3 +102,8 @@ document.addEventListener('dblclick', (event) => {
   
   return false;
 }, true);
+
+// Очистка при выгрузке страницы
+window.addEventListener('unload', () => {
+  clearTimeout(singleClickTimer);
+});
