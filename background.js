@@ -6,9 +6,6 @@ browser.browserAction.onClicked.addListener(() => {
   // Инвертируем текущее состояние
   extensionEnabled = !extensionEnabled;
   
-  // Сохраняем новое состояние
-  browser.storage.local.set({ enabled: extensionEnabled });
-  
   // Обновляем состояние расширения
   setExtensionState(extensionEnabled);
 });
@@ -24,6 +21,55 @@ function openInBackgroundTab(url) {
       index: currentTab.index + 1 // Размещаем новую вкладку сразу после текущей
     });
   });
+}
+
+// Функция для определения темной темы
+function detectDarkTheme(theme) {
+  // Проверяем цвета, чтобы определить, темная ли тема
+  if (theme.colors) {
+    // Проверяем popup или toolbar цвет фона (обычно определяющий)
+    const bgColor = theme.colors.popup || theme.colors.menupopup_background || theme.colors.toolbar;
+    if (bgColor) {
+      // Конвертируем в RGB и проверяем яркость
+      const rgb = hexToRgb(bgColor);
+      if (rgb) {
+        // Используем формулу яркости: (R * 299 + G * 587 + B * 114) / 1000
+        const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+        return brightness < 128; // Если яркость < 128, считаем темной темой
+      }
+    }
+    
+    // Если не смогли определить по цвету, используем текстовый цвет
+    const textColor = theme.colors.popup_text || theme.colors.menupopup_text || theme.colors.toolbar_text;
+    if (textColor) {
+      const rgb = hexToRgb(textColor);
+      if (rgb) {
+        const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+        return brightness > 128; // Если текст светлый, значит фон темный
+      }
+    }
+  }
+  
+  // Если не удалось определить по теме, проверяем системную цветовую схему
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+// Функция для конвертации hex в rgb
+function hexToRgb(hex) {
+  // Проверяем, является ли значение hex-цветом
+  if (typeof hex !== 'string' || !hex.startsWith('#')) {
+    return null;
+  }
+  
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+  
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
 }
 
 // Получение темы и отправка цветов в content script
@@ -60,55 +106,6 @@ function getAndSendThemeColors() {
                (isDarkTheme ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)")
       }
     };
-    
-    // Функция для определения темной темы
-    function detectDarkTheme(theme) {
-      // Проверяем цвета, чтобы определить, темная ли тема
-      if (theme.colors) {
-        // Проверяем popup или toolbar цвет фона (обычно определяющий)
-        const bgColor = theme.colors.popup || theme.colors.menupopup_background || theme.colors.toolbar;
-        if (bgColor) {
-          // Конвертируем в RGB и проверяем яркость
-          const rgb = hexToRgb(bgColor);
-          if (rgb) {
-            // Используем формулу яркости: (R * 299 + G * 587 + B * 114) / 1000
-            const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-            return brightness < 128; // Если яркость < 128, считаем темной темой
-          }
-        }
-        
-        // Если не смогли определить по цвету, используем текстовый цвет
-        const textColor = theme.colors.popup_text || theme.colors.menupopup_text || theme.colors.toolbar_text;
-        if (textColor) {
-          const rgb = hexToRgb(textColor);
-          if (rgb) {
-            const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-            return brightness > 128; // Если текст светлый, значит фон темный
-          }
-        }
-      }
-      
-      // Если не удалось определить по теме, проверяем системную цветовую схему
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    
-    // Функция для конвертации hex в rgb
-    function hexToRgb(hex) {
-      // Проверяем, является ли значение hex-цветом
-      if (typeof hex !== 'string' || !hex.startsWith('#')) {
-        return null;
-      }
-      
-      const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-      hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-      
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      } : null;
-    }
     
     // Отправляем цвета во все открытые вкладки, если расширение включено
     if (extensionEnabled) {
@@ -179,18 +176,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       engine: null  // Использовать поисковую систему по умолчанию
     }).catch(error => {
       console.error('Ошибка при выполнении поиска:', error);
-      
-      // Резервный вариант, если search API не работает
-      fallbackSearch(message.searchText);
     });
   }
 });
-
-// Функция для резервного поиска, если search API не работает
-function fallbackSearch(searchText) {
-  // Используем Google как запасной вариант
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchText)}`;
-  
-  // Открываем результаты поиска в новой вкладке
-  browser.tabs.create({ url: searchUrl });
-}
